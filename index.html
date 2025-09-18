@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SolusPoints</title>
+<meta name="description" content="SolusPoints — browse-to-earn prototype with Firebase Auth + Firestore. Single-file, monochrome UI."/>
+<link rel="preconnect" href="https://www.gstatic.com">
+<style>
+  :root{
+    --bg:#ffffff; --pane:#f7f7f7; --ink:#111111; --ink-2:#444; --line:#e6e6e6; --shadow:#eaeaea;
+    --accent:#000; --ok:#0f7a39; --warn:#c47c00; --bad:#b00020;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family: "Nunito", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
+  }
+  header{
+    position:sticky; top:0; z-index:20; background:#fff; border-bottom:2px solid var(--line);
+    display:flex; align-items:center; gap:14px; padding:14px 18px; box-shadow:0 6px 0 var(--shadow);
+  }
+  .brand{display:flex; align-items:center; gap:10px; font-weight:900; letter-spacing:.3px; font-size:18px}
+  .brand .logo{width:32px; height:32px; display:grid; place-items:center; border:2px solid #000; border-radius:10px}
+  .grow{flex:1}
+  .chip{display:inline-flex; gap:8px; align-items:center; background:#fff; border:2px solid var(--line);
+        padding:6px 10px; border-radius:999px; color:var(--ink-2); font-weight:700}
+  .btn{
+    appearance:none; border:0; background:var(--accent); color:#fff; padding:12px 18px; border-radius:14px;
+    font-weight:800; letter-spacing:.2px; box-shadow:0 6px 0 var(--shadow); cursor:pointer; transition:transform .05s ease;
+  }
+  .btn:active{ transform: translateY(2px); }
+  .btn.ghost{ background:#fff; color:var(--ink); border:2px solid var(--ink); box-shadow:none }
+  .btn.light{ background:#000; color:#fff }
+  .btn:disabled{opacity:.5; cursor:not-allowed}
+  .container{max-width:1100px; margin:20px auto; padding:0 16px}
+  .grid{display:grid; gap:16px}
+  .cards{display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr))}
+  .card{
+    background:var(--pane); border:2px solid var(--line); border-radius:22px; padding:18px;
+    box-shadow:0 6px 0 var(--shadow);
+  }
+  .h1{margin:0 0 8px; font-size:28px; font-weight:900}
+  .h2{margin:0 0 8px; font-size:22px; font-weight:900}
+  .h3{margin:0 0 8px; font-size:18px; font-weight:900}
+  p{color:var(--ink-2); line-height:1.5}
+  label{font-weight:800; font-size:13px}
+  input,select{
+    width:100%; padding:12px 14px; background:#fff; border:2px solid var(--line); border-radius:14px; outline:none;
+    font-weight:700; color:var(--ink);
+  }
+  .row{display:flex; gap:12px; flex-wrap:wrap}
+  .kpi{display:grid; grid-template-columns: repeat(4, minmax(140px,1fr)); gap:12px}
+  .tile{background:#fff; border:2px solid var(--line); border-radius:18px; padding:14px; text-align:center}
+  .tile .big{font-size:28px; font-weight:900}
+  .muted{color:var(--ink-2)}
+  .hidden{display:none !important}
+  .hr{height:2px; background:var(--line); margin:12px 0}
+  .table{width:100%; border-collapse:collapse}
+  .table th,.table td{border-bottom:2px solid var(--line); padding:10px 6px; text-align:left}
+  .right{text-align:right}
+  .ok{color:var(--ok)} .bad{color:var(--bad)} .warn{color:var(--warn)}
+  .split{display:grid; grid-template-columns:1.15fr .85fr; gap:16px}
+  @media (max-width: 920px){ .split{grid-template-columns:1fr} .kpi{grid-template-columns: repeat(2,1fr)} }
+  /* Modal */
+  .modal{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25)}
+  .modal.show{display:flex}
+  .panel{width:min(820px,94vw); background:#fff; border:2px solid var(--ink); border-radius:22px; padding:16px; max-height:86vh; overflow:auto}
+  .topbar{display:flex; align-items:center; justify-content:space-between; gap:10px}
+  .pill{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border:2px solid var(--ink); border-radius:999px; font-weight:800}
+  .small{font-size:12px}
+  .center{display:flex; justify-content:center; align-items:center}
+  .space{height:8px}
+  .notice{padding:12px; border:2px dashed var(--line); border-radius:14px; background:#fff}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo"><span style="font-weight:900;">S</span></div>
+    <div>SolusPoints</div>
+  </div>
+  <div class="grow"></div>
+  <div id="userChip" class="chip hidden">—</div>
+  <button id="logoutBtn" class="btn ghost hidden">Log out</button>
+</header>
+
+<main class="container">
+  <!-- AUTH -->
+  <section id="authSec" class="grid" style="grid-template-columns:1fr 1fr; align-items:start;">
+    <div class="card">
+      <div class="h2">Sign in</div>
+      <p class="muted">Welcome back. Earn points for daily check‑ins, reading, quizzes, and more.</p>
+      <label>Email</label>
+      <input id="siEmail" type="email" placeholder="you@example.com" autocomplete="email">
+      <div class="space"></div>
+      <label>Password</label>
+      <input id="siPass" type="password" placeholder="••••••••" autocomplete="current-password">
+      <div class="space"></div>
+      <button id="loginBtn" class="btn">Sign in</button>
+      <div class="space"></div>
+      <p class="small muted">Tip: Use a demo email on first run and a simple password (this is a prototype).</p>
+    </div>
+
+    <div class="card">
+      <div class="h2">Create account</div>
+      <div class="row">
+        <div style="flex:2">
+          <label>Email</label>
+          <input id="suEmail" type="email" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div style="flex:1">
+          <label>Country</label>
+          <select id="suCountry">
+            <option value="AU">Australia</option><option value="NZ">New Zealand</option>
+            <option value="US">United States</option><option value="GB">United Kingdom</option>
+            <option value="CA">Canada</option><option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="space"></div>
+      <label>Display name</label>
+      <input id="suDisplay" placeholder="What should we call you?">
+      <div class="space"></div>
+      <label>Password</label>
+      <input id="suPass" type="password" placeholder="At least 6 characters" autocomplete="new-password">
+      <div class="space"></div>
+      <button id="signupBtn" class="btn">Create account</button>
+      <div class="space"></div>
+      <div class="notice small">By continuing, you agree that this prototype stores your profile and points in a backend database.</div>
+    </div>
+  </section>
+
+  <!-- APP -->
+  <section id="appSec" class="hidden">
+    <div class="split">
+      <div>
+        <div class="card">
+          <div class="row" style="align-items:center; justify-content:space-between;">
+            <div class="h1" id="greeting">Welcome</div>
+            <div class="chip" id="streakChip">Streak: 0</div>
+          </div>
+          <div class="kpi">
+            <div class="tile"><div class="big" id="points">0</div><div class="muted">Points</div></div>
+            <div class="tile"><div class="big" id="level">1</div><div class="muted">Level</div></div>
+            <div class="tile"><div class="big" id="today">0</div><div class="muted">Today</div></div>
+            <div class="tile"><div class="big" id="cap">/ 200</div><div class="muted">Daily cap</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="h2">Earn points</div>
+          <div class="cards">
+            <div class="card">
+              <div class="h3">Daily check‑in</div>
+              <p class="muted small">Keep your streak alive for bonus points.</p>
+              <button id="checkinBtn" class="btn">Claim +25</button>
+              <div class="space"></div><div id="checkinHint" class="small muted">Available now.</div>
+            </div>
+
+            <div class="card">
+              <div class="h3">Read: Focus like a pro</div>
+              <p class="muted small">Scroll to the end to unlock claim.</p>
+              <button id="readBtn" class="btn light">Open article</button>
+              <div class="space"></div><div id="readHint" class="small muted">Reward: +15 (once/day)</div>
+            </div>
+
+            <div class="card">
+              <div class="h3">Quick quiz</div>
+              <p class="muted small">Answer 3 questions. Score 2+ to earn.</p>
+              <button id="quizBtn" class="btn light">Take quiz</button>
+              <div class="space"></div><div id="quizHint" class="small muted">Reward: +30 (once/day)</div>
+            </div>
+
+            <div class="card">
+              <div class="h3">Promo code</div>
+              <p class="muted small">Sometimes we drop codes in videos or posts.</p>
+              <div class="row">
+                <input id="codeInput" placeholder="Enter code (e.g. SOLUS-START)">
+                <button id="codeBtn" class="btn">Redeem</button>
+              </div>
+              <div class="space"></div><div id="codeHint" class="small muted">Try: SOLUS-START (+20), AEST-FRIDAY (+30)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="h2">Ledger</div>
+          <table class="table" id="ledgerTable">
+            <thead><tr><th>When</th><th>Event</th><th>Δ</th><th class="right">Balance</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="h2">Rewards</div>
+          <p class="small muted">Prototype: redemption records are stored; fulfilment is manual.</p>
+          <div class="cards">
+            <div class="card">
+              <div class="h3">Amazon AU $5</div>
+              <p class="muted small">Cost: 5,000 points • Limit: 1 / 30 days</p>
+              <button id="redeemAmazon" class="btn">Redeem 5,000</button>
+            </div>
+            <div class="card">
+              <div class="h3">Nameplate badge</div>
+              <p class="muted small">Cost: 150 points • Cosmetic</p>
+              <button id="redeemBadge" class="btn">Redeem 150</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="h2">Account</div>
+          <div class="row">
+            <button id="refreshBtn" class="btn light">Refresh</button>
+            <button id="logoutBtn2" class="btn ghost">Log out</button>
+          </div>
+          <div class="space"></div>
+          <div class="notice small">Data lives in Firestore under your account. Points logic runs server‑side (via security rules/transactions) in a full build; here we use guarded client transactions for a prototype.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- MODALS -->
+<div class="modal" id="articleModal" aria-hidden="true">
+  <div class="panel">
+    <div class="topbar">
+      <div class="pill">Article • Focus like a pro</div>
+      <button class="btn ghost" data-close="#articleModal">Close</button>
+    </div>
+    <div id="articleScroll" style="max-height:60vh; overflow:auto; padding-right:6px;">
+      <p><strong>Foundations:</strong> Attention is a resource. Budget it, guard it, and invest it.</p>
+      <p><strong>1) Friction engineering.</strong> Make the wrong thing harder; make the right thing trivial.</p>
+      <p><strong>2) Rituals beat motivation.</strong> Same slot, same setup, small win to start.</p>
+      <p><strong>3) Constraints create flow.</strong> 45/10 sprints; single‑task windows; silence the noise.</p>
+      <p><strong>4) Visual anchors.</strong> Splash screens, progress rings, timers. Emotion → progress.</p>
+      <p><strong>5) Debrief fast.</strong> 60 seconds: what moved, what stuck, one next step.</p>
+      <div style="height:500px"></div>
+      <p><em>You’ve reached the end.</em></p>
+    </div>
+    <div class="hr"></div>
+    <div class="row" style="justify-content:flex-end">
+      <button id="claimArticleBtn" class="btn" disabled>Claim +15</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="quizModal" aria-hidden="true">
+  <div class="panel">
+    <div class="topbar">
+      <div class="pill">Quiz • 3 questions</div>
+      <button class="btn ghost" data-close="#quizModal">Close</button>
+    </div>
+    <div id="quizArea"></div>
+    <div class="hr"></div>
+    <div class="row" style="justify-content:flex-end">
+      <button id="submitQuizBtn" class="btn">Submit</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="redeemModal" aria-hidden="true">
+  <div class="panel">
+    <div class="topbar">
+      <div class="pill">Redeem • Confirmation</div>
+      <button class="btn ghost" data-close="#redeemModal">Close</button>
+    </div>
+    <div id="redeemArea"></div>
+  </div>
+</div>
+
+<!-- Firebase + App (single-file) -->
+<script type="module">
+/* ===== Firebase SDK (modular) ===== */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile
+} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp, runTransaction,
+  collection, query, orderBy, limit, getDocs, addDoc
+} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+
+/* ====== CONFIG: replace with your Firebase web app credentials ====== */
+const firebaseConfig = {
+  apiKey: "AIzaSyDPNn8aUQV_4fQhEtFkz8kbpYbLsr25Cqc",
+  authDomain: "project-soluspoints.firebaseapp.com",
+  projectId: "project-soluspoints",
+  storageBucket: "project-soluspoints.firebasestorage.app",
+  messagingSenderId: "1092367506813",
+  appId: "1:1092367506813:web:b0d24ae7ce3b0b8354c014",
+  measurementId: "G-51LD57KQGR"
+};
+/* =================================================================== */
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+/* ====== UI helpers ====== */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const fmt = n => new Intl.NumberFormat().format(n);
+const todayISO = () => new Date().toISOString().slice(0,10);
+
+function show(id){ $("#authSec").classList.add("hidden"); $("#appSec").classList.add("hidden"); $(id).classList.remove("hidden"); }
+function toast(msg){ alert(msg); } // minimal stub
+
+/* ====== Data layer ====== */
+function userDocRef(uid){ return doc(db, "users", uid); }
+function ledgerColRef(uid){ return collection(db, "users", uid, "ledger"); }
+function redemptionsColRef(uid){ return collection(db, "users", uid, "redemptions"); }
+
+async function ensureUserProfile(user, extra={}){
+  const ref = userDocRef(user.uid);
+  const snap = await getDoc(ref);
+  if(!snap.exists()){
+    const base = {
+      email: user.email || null,
+      displayName: user.displayName || extra.displayName || (user.email? user.email.split("@")[0]:"User"),
+      country: extra.country || "AU",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      points: 0,
+      level: 1,
+      todayPoints: 0,
+      dailyCap: 200,
+      lastActive: todayISO(),
+      lastCheckin: null,
+      streak: 0,
+      claimed: { article:null, quiz:null, codes:{} },
+      limits: {}
+    };
+    await setDoc(ref, base);
+    return base;
+  } else {
+    return snap.data();
+  }
+}
+
+async function getProfile(uid){
+  const snap = await getDoc(userDocRef(uid));
+  return snap.exists()? snap.data(): null;
+}
+
+async function getLedger(uid, count=50){
+  const q = query(ledgerColRef(uid), orderBy("ts","desc"), limit(count));
+  const s = await getDocs(q);
+  return s.docs.map(d=>({id:d.id, ...d.data()}));
+}
+
+async function pushLedger(uid, entry){
+  await addDoc(ledgerColRef(uid), entry);
+}
+
+async function transactionalUpdate(uid, fn){
+  await runTransaction(db, async (tx)=>{
+    const ref = userDocRef(uid);
+    const snap = await tx.get(ref);
+    if(!snap.exists()) throw new Error("Profile missing");
+    let u = snap.data();
+    const { changed, entry } = fn(u);
+    if(changed){
+      u.updatedAt = serverTimestamp();
+      tx.update(ref, changed);
+      if(entry){
+        const col = ledgerColRef(uid);
+        // transaction can't add to subcollection; we enqueue outside after runTransaction
+        // We'll stash entry in window._pendingLedger to write after transaction
+        window._pendingLedger = entry;
+      }
+    }
+  });
+  if(window._pendingLedger){
+    await pushLedger(auth.currentUser.uid, window._pendingLedger);
+    window._pendingLedger = null;
+  }
+}
+
+/* ====== Points logic (server-like in client via transactions) ====== */
+function computeLevel(points){ return 1 + Math.floor(points/500); }
+
+async function addPoints(uid, delta, reason){
+  const date = todayISO();
+  let grant = 0, newBalance = 0;
+  await transactionalUpdate(uid, (u)=>{
+    // daily reset if date changed
+    if(u.lastActive !== date){
+      u.todayPoints = 0;
+      u.lastActive = date;
+    }
+    const available = Math.max(0, (u.dailyCap||200) - (u.todayPoints||0));
+    grant = Math.min(delta, available);
+    if(grant <= 0){
+      return { changed: null };
+    }
+    const updated = {
+      points: (u.points||0) + grant,
+      todayPoints: (u.todayPoints||0) + grant,
+      lastActive: u.lastActive,
+      level: computeLevel((u.points||0) + grant)
+    };
+    newBalance = updated.points;
+    return {
+      changed: updated,
+      entry: { ts: new Date(), reason, delta: grant, balance: newBalance }
+    };
+  });
+  return { grant, newBalance };
+}
+
+async function doCheckin(uid){
+  const date = todayISO();
+  let result = { grant:0, streak:0, message:"" };
+  await transactionalUpdate(uid, (u)=>{
+    const today = date;
+    // daily reset for todayPoints handled in addPoints later
+    const last = u.lastCheckin;
+    let streak = u.streak || 0;
+    if(!last){ streak = 1; }
+    else{
+      const diff = Math.floor((new Date(today) - new Date(last))/(1000*3600*24));
+      if(diff === 0){ result.message = "Already checked in today"; return { changed:null }; }
+      if(diff === 1){ streak += 1; } else if(diff > 1){ streak = 1; }
+    }
+    // streak bonus
+    const bonus = Math.min(20, 2*(streak-1));
+    result.streak = streak;
+    // apply points via changed values after we compute grant in a second transaction-style step
+    const changed = { lastCheckin: today, streak };
+    return { changed, entry: null };
+  });
+  if(result.message){ return { ok:false, msg:result.message }; }
+  const bonus = Math.min(20, 2*(result.streak-1));
+  const { grant } = await addPoints(uid, 25 + bonus, `Daily check‑in (Day ${result.streak}, +${bonus})`);
+  return grant>0 ? { ok:true, grant, streak:result.streak } : { ok:false, msg:"Daily cap reached" };
+}
+
+async function canClaimArticle(u){
+  const today = todayISO();
+  if(u.claimed?.article === today) return { ok:false, msg:"Already claimed today" };
+  return { ok:true };
+}
+async function claimArticle(uid){
+  let allowed = false;
+  await transactionalUpdate(uid, (u)=>{
+    const today = todayISO();
+    const claimed = u.claimed || {};
+    if(claimed.article === today) return { changed:null };
+    claimed.article = today;
+    return { changed: { claimed }, entry: null };
+  });
+  // Verify after transaction
+  const u = await getProfile(uid);
+  allowed = u.claimed?.article === today;
+  if(!allowed) return { ok:false, msg:"Already claimed today" };
+  const { grant } = await addPoints(uid, 15, "Article: Focus like a pro");
+  return grant>0 ? { ok:true, grant } : { ok:false, msg:"Daily cap reached" };
+}
+
+async function canTakeQuiz(u){
+  const today = todayISO();
+  if(u.claimed?.quiz === today) return { ok:false, msg:"Quiz already completed today" };
+  return { ok:true };
+}
+async function submitQuiz(uid, score){
+  if(score < 2) return { ok:false, msg:"Score at least 2/3 to earn" };
+  let allowed = false;
+  await transactionalUpdate(uid, (u)=>{
+    const today = todayISO();
+    const claimed = u.claimed || {};
+    if(claimed.quiz === today) return { changed:null };
+    claimed.quiz = today;
+    return { changed: { claimed }, entry: null };
+  });
+  const u = await getProfile(uid);
+  allowed = u.claimed?.quiz === today;
+  if(!allowed) return { ok:false, msg:"Quiz already completed today" };
+  const { grant } = await addPoints(uid, 30, "Quiz passed");
+  return grant>0 ? { ok:true, grant } : { ok:false, msg:"Daily cap reached" };
+}
+
+async function redeemCode(uid, code){
+  const CODES = { "SOLUS-START":20, "AEST-FRIDAY":30 };
+  const c = (code||"").trim().toUpperCase();
+  if(!CODES[c]) return { ok:false, msg:"Invalid code" };
+  let permitted = false;
+  await transactionalUpdate(uid, (u)=>{
+    const claimed = u.claimed || { codes:{} };
+    claimed.codes = claimed.codes || {};
+    if(claimed.codes[c]) return { changed:null };
+    claimed.codes[c] = true;
+    return { changed: { claimed }, entry: null };
+  });
+  const u = await getProfile(uid);
+  if(!(u.claimed?.codes && u.claimed.codes[c])) return { ok:false, msg:"Code already used" };
+  const { grant } = await addPoints(uid, CODES[c], `Promo code ${c}`);
+  return grant>0 ? { ok:true, grant } : { ok:false, msg:"Daily cap reached" };
+}
+
+async function redeemReward(uid, cost, label, limiterKey, limitDays){
+  const now = new Date();
+  let ok=false, msg="";
+  await transactionalUpdate(uid, (u)=>{
+    const limits = u.limits || {};
+    const last = limits[limiterKey] || 0;
+    const since = now.getTime() - (typeof last==="number" ? last : 0);
+    if(limitDays>0 && since < limitDays*24*3600*1000){
+      msg = "Limit reached. Try later."; return { changed:null };
+    }
+    if((u.points||0) < cost){ msg="Not enough points."; return { changed:null }; }
+    const newPoints = (u.points||0) - cost;
+    const changed = { points: newPoints, level: computeLevel(newPoints) };
+    limits[limiterKey] = now.getTime();
+    changed.limits = limits;
+    window._pendingLedger = { ts: now, reason:`Redeem: ${label}`, delta:-cost, balance: newPoints };
+    ok=true;
+    return { changed, entry: null };
+  });
+  if(!ok) return { ok:false, msg };
+  await addDoc(redemptionsColRef(uid), { ts:new Date(), label, cost, status:"pending" });
+  return { ok:true };
+}
+
+/* ====== UI: bindings ====== */
+let currentUser = null, currentProfile = null;
+
+function setHeaderUser(u){
+  if(u){
+    $("#userChip").classList.remove("hidden");
+    $("#logoutBtn").classList.remove("hidden");
+    $("#userChip").textContent = `${u.displayName || "User"} • ${u.email || ""}`;
+  }else{
+    $("#userChip").classList.add("hidden");
+    $("#logoutBtn").classList.add("hidden");
+  }
+}
+
+async function refresh(){
+  if(!auth.currentUser) return;
+  currentProfile = await getProfile(auth.currentUser.uid);
+  $("#greeting").textContent = `Welcome, ${currentProfile.displayName || "Friend"}`;
+  $("#streakChip").textContent = `Streak: ${currentProfile.streak || 0}`;
+  $("#points").textContent = fmt(currentProfile.points || 0);
+  $("#level").textContent = fmt(currentProfile.level || 1);
+  $("#today").textContent = fmt(currentProfile.todayPoints || 0);
+  $("#cap").textContent = `/ ${fmt(currentProfile.dailyCap || 200)}`;
+
+  // availability
+  const today = todayISO();
+  $("#checkinBtn").disabled = (currentProfile.lastCheckin === today);
+  $("#checkinHint").textContent = (currentProfile.lastCheckin === today) ? "Already checked in today." : "Available now.";
+  $("#readHint").textContent = (currentProfile.claimed?.article === today) ? "Already claimed today." : "Reward: +15 (once/day)";
+  $("#quizHint").textContent = (currentProfile.claimed?.quiz === today) ? "Already completed today." : "Reward: +30 (once/day)";
+
+  // ledger
+  const rows = await getLedger(auth.currentUser.uid, 100);
+  const tbody = $("#ledgerTable tbody"); tbody.innerHTML = "";
+  rows.forEach(e=>{
+    const tr = document.createElement("tr");
+    const when = (e.ts?.toDate ? e.ts.toDate() : (e.ts instanceof Date ? e.ts : new Date(e.ts))).toLocaleString();
+    tr.innerHTML = `<td>${when}</td><td>${e.reason}</td>
+      <td class="${e.delta>=0?'ok':'bad'}">${e.delta>=0?'+':''}${e.delta}</td>
+      <td class="right">${fmt(e.balance)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+$("#signupBtn").addEventListener("click", async ()=>{
+  const email = $("#suEmail").value.trim();
+  const pass = $("#suPass").value;
+  const displayName = $("#suDisplay").value.trim() || (email? email.split("@")[0]:"User");
+  const country = $("#suCountry").value || "AU";
+  if(!email || !pass){ toast("Email and password required"); return; }
+  try{
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    await updateProfile(cred.user, { displayName });
+    await ensureUserProfile(cred.user, { displayName, country });
+    show("#appSec"); setHeaderUser(cred.user); await refresh();
+  }catch(e){ toast(e.message); }
+});
+
+$("#loginBtn").addEventListener("click", async ()=>{
+  const email = $("#siEmail").value.trim();
+  const pass = $("#siPass").value;
+  if(!email || !pass){ toast("Email and password required"); return; }
+  try{
+    const cred = await signInWithEmailAndPassword(auth, email, pass);
+    await ensureUserProfile(cred.user);
+    show("#appSec"); setHeaderUser(cred.user); await refresh();
+  }catch(e){ toast(e.message); }
+});
+
+$("#logoutBtn").addEventListener("click", async ()=>{ await signOut(auth); });
+$("#logoutBtn2").addEventListener("click", async ()=>{ await signOut(auth); });
+$("#refreshBtn").addEventListener("click", refresh);
+
+$("#checkinBtn").addEventListener("click", async ()=>{
+  if(!auth.currentUser) return;
+  const res = await doCheckin(auth.currentUser.uid);
+  if(!res.ok){ toast(res.msg); } else { toast(`+${res.grant} points`); }
+  await refresh();
+});
+
+$("#readBtn").addEventListener("click", ()=>{
+  $("#claimArticleBtn").disabled = true;
+  $("#articleModal").classList.add("show");
+});
+$('[data-close="#articleModal"]').addEventListener("click", ()=> $("#articleModal").classList.remove("show"));
+
+const articleScroll = $("#articleScroll");
+articleScroll.addEventListener("scroll", ()=>{
+  const atBottom = Math.ceil(articleScroll.scrollTop + articleScroll.clientHeight) >= articleScroll.scrollHeight - 10;
+  if(atBottom) $("#claimArticleBtn").disabled = false;
+});
+$("#claimArticleBtn").addEventListener("click", async ()=>{
+  if(!auth.currentUser) return;
+  const can = await canClaimArticle(currentProfile);
+  if(!can.ok){ toast(can.msg); return; }
+  const res = await claimArticle(auth.currentUser.uid);
+  if(res.ok){ toast(`+${res.grant} points`); $("#articleModal").classList.remove("show"); await refresh(); }
+  else toast(res.msg);
+});
+
+const quizQuestions = [
+  { q:"Increase by 20%, then decrease by 20%: final value?", opts:["Equal","Greater","Less"], a:2 },
+  { q:"Triangle 3‑4‑5 is right‑angled because of…", opts:["Sine rule","Cosine rule","Pythagoras"], a:2 },
+  { q:"A prime is…", opts:["Only even numbers","Divisible by 1 and itself","Any number > 1"], a:1 }
+];
+$("#quizBtn").addEventListener("click", ()=>{
+  const area = $("#quizArea"); area.innerHTML = "";
+  quizQuestions.forEach((it, i)=>{
+    const card = document.createElement("div"); card.className="card";
+    const name = "q"+i;
+    card.innerHTML = `<div class="h3">${i+1}. ${it.q}</div>` + it.opts.map((op, j)=>`
+      <label style="display:flex; gap:8px; align-items:center; margin:6px 0;">
+        <input type="radio" name="${name}" value="${j}"> <span>${op}</span>
+      </label>`).join("");
+    area.appendChild(card);
+  });
+  $("#quizModal").classList.add("show");
+});
+$('[data-close="#quizModal"]').addEventListener("click", ()=> $("#quizModal").classList.remove("show"));
+$("#submitQuizBtn").addEventListener("click", async ()=>{
+  const ans = quizQuestions.map((_,i)=> {
+    const el = document.querySelector(`input[name="q${i}"]:checked`);
+    return el ? parseInt(el.value,10) : -1;
+  });
+  if(ans.includes(-1)){ toast("Answer all questions."); return; }
+  const score = ans.reduce((s,v,i)=> s + (v===quizQuestions[i].a?1:0), 0);
+  const can = await canTakeQuiz(currentProfile);
+  if(!can.ok){ toast(can.msg); return; }
+  const res = await submitQuiz(auth.currentUser.uid, score);
+  if(res.ok){ toast(`You scored ${score}/3 • +${res.grant} points`); $("#quizModal").classList.remove("show"); await refresh(); }
+  else toast(`You scored ${score}/3 • ${res.msg}`);
+});
+
+$("#codeBtn").addEventListener("click", async ()=>{
+  const code = $("#codeInput").value;
+  const res = await redeemCode(auth.currentUser.uid, code);
+  if(res.ok){ $("#codeInput").value=""; toast(`Code applied: +${res.grant} points`); }
+  else toast(res.msg);
+  await refresh();
+});
+
+function openRedeem(label, text){
+  $("#redeemArea").innerHTML = `<p>${text}</p><div class="hr"></div><p class="small muted">Prototype: fulfilment is manual — your redemption is recorded in Firestore.</p>`;
+  $("#redeemModal").classList.add("show");
+}
+$('[data-close="#redeemModal"]').addEventListener("click", ()=> $("#redeemModal").classList.remove("show"));
+
+$("#redeemAmazon").addEventListener("click", async ()=>{
+  const res = await redeemReward(auth.currentUser.uid, 5000, "Amazon AU $5", "amazon5", 30);
+  if(res.ok){ openRedeem("Amazon AU $5", "Success! Your $5 Amazon AU redemption is queued for processing."); await refresh(); }
+  else toast(res.msg);
+});
+$("#redeemBadge").addEventListener("click", async ()=>{
+  const res = await redeemReward(auth.currentUser.uid, 150, "Nameplate badge", "badge", 0);
+  if(res.ok){ openRedeem("Nameplate badge", "Nice! Your badge is active."); await refresh(); }
+  else toast(res.msg);
+});
+
+/* ====== Auth state ====== */
+onAuthStateChanged(auth, async (user)=>{
+  currentUser = user || null;
+  if(user){
+    await ensureUserProfile(user);
+    setHeaderUser(user);
+    show("#appSec");
+    await refresh();
+  }else{
+    setHeaderUser(null);
+    show("#authSec");
+  }
+});
+</script>
+</body>
+</html>
